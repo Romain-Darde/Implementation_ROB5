@@ -13,10 +13,10 @@ Le système est monté sur une Base Shield V2.1 de seeed studio pour la gestion 
 | Composant | Interface | Broches / Port |
 | :--- | :--- | :--- |
 | **STM32 Nucleo-F103RB** | - | - |
-| **Codeur rotatif** | GPIO | Port Grove D4 (PB5, PB4) |
+| **Codeur rotatif** | GPIO | Port Grove D4 (D4 : PB5, D5 : PB4) |
 | **IMU (ICM-20600)** | I2C | Port I2C (0x69) |
 | **Magnétomètre (AK09918)** | I2C | Port I2C (0x0C) |
-| **Driver Moteur (TB6612FNG)** | PWM / GPIO | Port Grove D6 (PB10, PA8) |
+| **Driver Moteur (TB6612FNG)** | PWM / GPIO | Port Grove D6 (D6 : PB10, D7 : PA8) |
 
 ## Validation des Composants
 
@@ -57,6 +57,8 @@ sudo screen /dev/ttyACM0 115200
 
 ### Sorties obtenues phase 1: 
 
+```bash
 OK: Codeur prêt sur D4
 IMU(0x69) ID=0x11 | Mag(0x0C) ID=0x48
 Compteur codeur: 107
+```
