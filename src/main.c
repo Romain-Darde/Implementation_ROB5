@@ -4,11 +4,15 @@
 #include <zephyr/sys/printk.h>
 #include "drivers/moteur.h"
 
-static const struct device *gpioa = DEVICE_DT_GET(DT_NODELABEL(gpioa));
 static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 
 // Signal A du codeur sur D2 (pin 10) pour capter les impulsions du moteur et compter les tours. Moteur connecté sur B1 et B2 du driver motor (Adresse I2C 0x14)
-#define PIN_A 10 
+// Signal B du codeur sur D3 (pin 3) pour détecter le sens de rotation du moteur (non utilisé dans ce code, mais peut être utile pour des améliorations futures)
+static const struct device *gpioa = DEVICE_DT_GET(DT_NODELABEL(gpioa));
+static const struct device *gpiob = DEVICE_DT_GET(DT_NODELABEL(gpiob));
+
+#define PIN_A 10 // D2 -> PA10
+#define PIN_B 3  // D3 -> PB3
 
 static struct gpio_callback codeur_cb;
 volatile int compte = 0;

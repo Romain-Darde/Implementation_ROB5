@@ -10,13 +10,13 @@ Le système est monté sur une Base Shield V2.1 de seeed studio pour la gestion 
 
 ### Composants
 
-| Composant | Interface | Broches / Port |
+| Composant | Interface | Broches / Port / Adresse |
 | :--- | :--- | :--- |
 | **STM32 Nucleo-F103RB** | - | - |
-| **Codeur rotatif** | GPIO | Port Grove D4 (D4 : PB5, D5 : PB4) |
-| **IMU (ICM-20600)** | I2C | Port I2C (0x69) |
-| **Magnétomètre (AK09918)** | I2C | Port I2C (0x0C) |
-| **Driver Moteur (TB6612FNG)** | I2C | Port I2C |
+| **Codeur rotatif** | GPIO | Port Grove D2 (PA10 & PB3) |
+| **IMU (ICM-20600)** | I2C | Adresse 0x69 |
+| **Magnétomètre (AK09918)** | I2C | Adresse 0x0C |
+| **Moteur DC (Boussole)** | I2C (via Driver 0x14) | Canal B (Borniers B1/B2) |
 
 ## Validation des Composants
 
