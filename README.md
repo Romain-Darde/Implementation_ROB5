@@ -16,7 +16,7 @@ Le système est monté sur une Base Shield V2.1 de seeed studio pour la gestion 
 | **Codeur rotatif** | GPIO | Port Grove D4 (D4 : PB5, D5 : PB4) |
 | **IMU (ICM-20600)** | I2C | Port I2C (0x69) |
 | **Magnétomètre (AK09918)** | I2C | Port I2C (0x0C) |
-| **Driver Moteur (TB6612FNG)** | PWM / GPIO | Port Grove D6 (D6 : PB10, D7 : PA8) |
+| **Driver Moteur (TB6612FNG)** | I2C | Port I2C |
 
 ## Validation des Composants
 
