@@ -4,9 +4,13 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(Implementation_ROB5)
 
 target_sources(app PRIVATE
-  src/main.c
-  src/drivers/moteur.c
-  src/drivers/moteur.h
-  src/sensors/sensors.c
-src/sensors/sensors.h
+    src/main.c
+    src/drivers/moteur.c
+    src/drivers/moteur.h
+    src/capteurs/codeur.c
+    src/capteurs/codeur.h
+    src/capteurs/boussole.c
+    src/capteurs/boussole.h
+    src/controle/pid.c
+    src/controle/pid.h
 )

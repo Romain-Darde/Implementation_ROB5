@@ -10,8 +10,8 @@ static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 #define CMD_TRIGO   0x02
 #define CMD_HORAIRE 0x03
 
-// Moteur connécté sur B1 et B2 du driver motor
-#define MOTOR_CHB   0x01 
+// Moteur connécté sur le canal B du driver motor : B1 et B2
+#define MOTOR_CHB 0x01 
 
 void moteur_init(void) {
     if (!device_is_ready(i2c_dev)) {
@@ -24,7 +24,7 @@ void moteur_init(void) {
     k_msleep(50); 
 
     moteur_set_vitesse(0);
-    printk("Motor driver I2C (0x14) initialise (Moteur B)\r\n");
+    printk("Motor driver I2C (0x14) initialise (Moteur canal B)\r\n");
 }
 
 void moteur_set_vitesse(int vitesse) {
