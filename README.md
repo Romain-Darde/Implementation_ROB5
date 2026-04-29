@@ -18,6 +18,8 @@ Le système est monté sur une Base Shield V2.1 de seeed studio pour la gestion 
 | **Magnétomètre (AK09918)** | I2C | Adresse 0x0C |
 | **Moteur DC (Boussole)** | I2C (via Driver 0x14) | Canal B (Borniers B1/B2) |
 
+Le driver moteur utilise une source d'énergie dédiée (pile 9V provenant d'un ancien boîtier d'alarme incendie). Ce choix a été fait pour pallier le manque de puissance du port USB de l'ordinateur, qui causait des chutes de tension lors du fonctionnement du moteur.
+
 ## Validation des Composants
 
 La phase 1 a consisté en la prise en main du matériel et la vérification des branchements. Les tests de diagnostic au démarrage confirment l'intégrité du bus I2C et la réponse correcte des composants :

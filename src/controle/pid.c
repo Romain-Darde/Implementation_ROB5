@@ -37,13 +37,13 @@ int pid_calculer_commande(PID_Controller *pid, float consigne, float position_ac
     // Erreur gardé en mémoire pour la prochaine itération
     pid->erreur_precedente = erreur;
 
-    // 6. Calcul de la commande totale
+    // Calcul de la commande totale
     float commande_flottante = P + I + D;
     int commande = (int)commande_flottante;
 
-    // 7. Bridage de sécurité (Limites physiques de ton driver moteur)
-    if (commande > 90) commande = 90;
-    if (commande < -90) commande = -90;
+    // Bridage de sécurité
+    if (commande > 100) commande = 100;
+    if (commande < -100) commande = -100;
 
     return commande;
 }

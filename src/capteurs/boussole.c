@@ -3,34 +3,47 @@
 #include <math.h>
 #include "boussole.h"
 
+extern struct k_mutex i2c_mutex;
+
 #define AK09918_ADDR 0x0C
 static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 
 int boussole_init(void) {
-    uint8_t id = 0;
-    i2c_reg_read_byte(i2c_dev, AK09918_ADDR, 0x00, &id); 
-    
-    printk("DEBUG: ID lu sur AK09918 = 0x%02x\n", id);
-
-    if (id == 0x09) {
-        printk("Boussole détectée avec succès !\n");
-        return 0;
-    } else {
-        printk("ERREUR: ID boussole incorrect (différent de 0X09)\n");
+    if (!device_is_ready(i2c_dev)) {
+        printk("ERREUR: Boussole I2C non prête\n");
         return -1;
     }
+
+    k_mutex_lock(&i2c_mutex, K_FOREVER);
+    i2c_reg_write_byte(i2c_dev, AK09918_ADDR, 0x31, 0x08);
+    k_mutex_unlock(&i2c_mutex);
+    k_msleep(50);
+    return 0;
 }
 
 float boussole_get_angle(void) {
+    static float derniere_valeur = 0.0f; // Garde la valeur en mémoire
     uint8_t data[6];
-    // On lit les 6 registres (X, Y, Z) en mode "Burst"
-    i2c_burst_read(i2c_dev, AK09918_ADDR, 0x11, data, 6);
 
-    // Recomposition des octets (Little Endian)
+    if (!device_is_ready(i2c_dev)) {
+        return derniere_valeur;
+    }
+
+    k_mutex_lock(&i2c_mutex, K_FOREVER);
+    int ret = i2c_burst_read(i2c_dev, AK09918_ADDR, 0x11, data, 6);
+    k_mutex_unlock(&i2c_mutex);
+    
+    // Si la lecture échoue, on renvoie la dernière valeur connue
+    if (ret != 0) return derniere_valeur;
+
     int16_t x = (int16_t)(data[1] << 8 | data[0]);
     int16_t y = (int16_t)(data[3] << 8 | data[2]);
 
-    // Calcul de l'angle en radians puis conversion en degrés
-    float angle = atan2((float)y, (float)x) * 180.0f / 3.14159f;
+    float angle = atan2f((float)y, (float)x) * 180.0f / 3.14159f;
+    if (angle < 0.0f) {
+        angle += 360.0f;
+    }
+
+    derniere_valeur = angle; // Mise à jour de la mémoire
     return angle;
 }

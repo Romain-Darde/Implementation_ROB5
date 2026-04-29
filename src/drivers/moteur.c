@@ -3,6 +3,8 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/kernel.h>
 
+extern struct k_mutex i2c_mutex;
+
 static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 #define MOTEUR_ADDR 0x14
 
@@ -20,25 +22,27 @@ void moteur_init(void) {
     }
     
     uint8_t wakeup = CMD_WAKEUP;
+    k_mutex_lock(&i2c_mutex, K_FOREVER);
     i2c_write(i2c_dev, &wakeup, 1, MOTEUR_ADDR);
+    k_mutex_unlock(&i2c_mutex);
     k_msleep(50); 
 
     moteur_set_vitesse(0);
-    printk("Motor driver I2C (0x14) initialise (Moteur canal B)\r\n");
+    //printk("Motor driver I2C (0x14) initialise (Moteur canal B)\r\n");
 }
 
 void moteur_set_vitesse(int vitesse) {
     uint8_t sens;
     
-    if (vitesse > 90) vitesse = 90;
-    if (vitesse < -90) vitesse = -90;
+    if (vitesse > 100) vitesse = 100;
+    if (vitesse < -100) vitesse = -100;
 
     // Arrêt si la vitesse est dans une zone de consgine trop faible pour faire tourner le moteur
-    if (vitesse > -60 && vitesse < 60) {
-        uint8_t stop[] = {CMD_TRIGO, MOTOR_CHB, 0x00};
-        i2c_write(i2c_dev, stop, 3, MOTEUR_ADDR);
-        return;
-    }
+    // if (vitesse > -20 && vitesse < 20) {
+    //     uint8_t stop[] = {CMD_TRIGO, MOTOR_CHB, 0x00};
+    //     i2c_write(i2c_dev, stop, 3, MOTEUR_ADDR);
+    //     return;
+    // }
 
     if (vitesse > 0) {
         sens = CMD_TRIGO;
@@ -48,6 +52,8 @@ void moteur_set_vitesse(int vitesse) {
     }
 
     // Trame I2C : {Sens, Moteur B (0x01), Vitesse}
-    uint8_t cmd[] = {0X02, MOTOR_CHB, (uint8_t)vitesse};
+    uint8_t cmd[] = {sens, MOTOR_CHB, (uint8_t)vitesse};
+    k_mutex_lock(&i2c_mutex, K_FOREVER);
     i2c_write(i2c_dev, cmd, 3, MOTEUR_ADDR);
+    k_mutex_unlock(&i2c_mutex);
 }

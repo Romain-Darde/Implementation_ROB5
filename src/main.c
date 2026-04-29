@@ -2,6 +2,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/sys/printk.h>
+#include <math.h>
 
 #include "drivers/moteur.h"
 #include "capteurs/codeur.h"
@@ -20,16 +21,31 @@ struct RobotState etat_robot = {0.0, 0.0};
 PID_Controller mon_pid;
 
 K_MUTEX_DEFINE(robot_mutex);
+K_MUTEX_DEFINE(i2c_mutex);
 
 // Thread de lecture des capteurs qui met à jour l'état du robot (angle actuel) en continu
 
 void thread_capteurs_fn(void *arg1, void *arg2, void *arg3) {
+    float angle_filtre = 0.0f;
     while (1) {
         float nouvel_angle = boussole_get_angle();
 
-        // On ferme le mutex, on met à jour, on dle déverrouille
+        // Filtre pour lisser les lectures de la boussole
+        float erreur_angle = nouvel_angle - angle_filtre;
+        if (erreur_angle > 180.0f) {
+            erreur_angle -= 360.0f;
+        } else if (erreur_angle < -180.0f) {
+            erreur_angle += 360.0f;
+        }
+        angle_filtre += 0.2f * erreur_angle;
+        if (angle_filtre < 0.0f) {
+            angle_filtre += 360.0f;
+        } else if (angle_filtre >= 360.0f) {
+            angle_filtre -= 360.0f;
+        }
+
         k_mutex_lock(&robot_mutex, K_FOREVER);
-        etat_robot.angle_actuel = nouvel_angle;
+        etat_robot.angle_actuel = angle_filtre;
         k_mutex_unlock(&robot_mutex);
 
         // Permet que ce ne soit pas trop rapide
@@ -40,18 +56,43 @@ void thread_capteurs_fn(void *arg1, void *arg2, void *arg3) {
 // Thread de contrôle PID qui lit l'état du robot, calcule la commande et l'envoie au moteur
 
 void thread_pid_fn(void *arg1, void *arg2, void *arg3) {
-    // Le temps entre chaque boucle PID (0.01s = 10 ms)
-    float dt = 0.01; 
+    float dt = 0.01f;
+    const float DEGREES_PER_TICK = 360.0f / 207.0f;
+
+    k_msleep(200);
+    k_mutex_lock(&robot_mutex, K_FOREVER);
+    float angle_robot_initial = etat_robot.angle_actuel;
+    k_mutex_unlock(&robot_mutex);
+
+    float angle_aiguille_initial = (float)codeur_get_ticks() * DEGREES_PER_TICK;
+    angle_aiguille_initial = fmodf(angle_aiguille_initial, 360.0f);
+    if (angle_aiguille_initial < 0.0f) {
+        angle_aiguille_initial += 360.0f;
+    }
+
+    float offset_nord = angle_robot_initial + angle_aiguille_initial;
+    offset_nord = fmodf(offset_nord, 360.0f);
+    if (offset_nord < 0.0f) {
+        offset_nord += 360.0f;
+    }
 
     while (1) {
-        // Lecture des variables dasn le mutex pour éviter les conflits
         k_mutex_lock(&robot_mutex, K_FOREVER);
-        float consigne_actuelle = etat_robot.consigne;
-        float angle_mesure = etat_robot.angle_actuel;
+        float angle_robot = etat_robot.angle_actuel;
         k_mutex_unlock(&robot_mutex);
 
-        // Calcul du PID pour obtenir la commande à envoyer au moteur
-        int commande = pid_calculer_commande(&mon_pid, consigne_actuelle, angle_mesure, dt);
+        // Récupération de la position actuelle de l'aiguille via le codeur
+        float angle_aiguille = (float)codeur_get_ticks() * DEGREES_PER_TICK;
+        angle_aiguille = fmodf(angle_aiguille, 360.0f);
+        if (angle_aiguille < 0.0f) {
+            angle_aiguille += 360.0f;
+        }
+
+        float cible_aiguille = offset_nord - angle_robot;
+
+        // Le PID compare la position de l'aiguille à sa cible
+        int commande = pid_calculer_commande(&mon_pid, cible_aiguille, angle_aiguille, dt);
+        
         moteur_set_vitesse(commande);
 
         k_msleep(10); 
@@ -64,7 +105,7 @@ K_THREAD_DEFINE(thread_pid_id, 1024, thread_pid_fn, NULL, NULL, NULL, 5, 0, 0);
 
 // Ancienne version du main pour tester le codeur et le moteur séparément
 
-// static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
+static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 
 // // Signal A du codeur sur D2 (pin 10) pour capter les impulsions du moteur et compter les tours. Moteur connecté sur B1 et B2 du driver motor (Adresse I2C 0x14)
 // // Signal B du codeur sur D3 (pin 3) pour détecter le sens de rotation du moteur (non utilisé dans ce code, mais peut être utile pour des améliorations futures)
@@ -141,33 +182,48 @@ int main(void) {
     // return 0;
 
     k_msleep(3000); // Laisser le temps d'ouvrir le terminal après le reset
-    printk("Démarrage\n");
+    //printk("Démarrage\n");
+
+    // Test debug I2C pour vérifier que la boussole répond avant de lancer le reste du code
+    // printk("TEST I2C\n");
+    // uint8_t data;
+    // for (uint8_t i = 1; i < 127; i++) {
+    //     if (i2c_reg_read_byte(i2c_dev, i, 0x00, &data) == 0) {
+    //         printk("Appareil trouve a l'adresse: 0x%02x\n", i);
+    //     }
+    // }
 
     // Initialisation hardware (I2C, GPIO, Moteur, Codeur, Boussole)
-    k_msleep(3000);
-    printk("Initialisation hardware\n");
+    //k_msleep(3000);
+    //printk("Initialisation hardware\n");
     moteur_init();
     codeur_init();
+    boussole_init();
 
-    if (boussole_init() != 0) {
-        printk("ATTENTION: La boussole ne répond pas, vérifie le câblage !\n");
-    } else {
-        printk("Boussole OK !\n");
-    }
+    k_msleep(500);
+    k_mutex_lock(&robot_mutex, K_FOREVER);
+    float angle_depart = etat_robot.angle_actuel;
+    k_mutex_unlock(&robot_mutex);
+
+    // Test de la boussole pour vérifier qu'elle répond avant de lancer le reste du code
+    // if (boussole_init() != 0) {
+    //     printk("ATTENTION: La boussole ne répond pas, vérifie le câblage !\n");
+    // } else {
+    //     printk("Boussole OK !\n");
+    // }
 
     // Valeurs du PID ordre : Kp=1.5, Ki=0.1, Kd=0.5
-    pid_init(&mon_pid, 1.5, 0.1, 0.5);
+    pid_init(&mon_pid, 1.5, 0.0, 0.0);
 
     while (1) {
-        // On récupère les valeurs dans le mutex pour l'affichage
+        float a, c;
         k_mutex_lock(&robot_mutex, K_FOREVER);
-        float consigne_print = etat_robot.consigne;
-        float angle_print = etat_robot.angle_actuel;
-        printk("Cible: %.1f deg | Actuel: %.1f deg\r\n", consigne_print, angle_print);
+        a = etat_robot.angle_actuel;
+        c = etat_robot.consigne;
         k_mutex_unlock(&robot_mutex);
 
-        // Affichage toutes les 3s sinon le bug
-        k_msleep(3000); 
+        printk("Cible: %.1f | Actuel: %.1f | Erreur: %.1f\r\n", c, a, c - a);
+        k_msleep(1000);
     }
 
     return 0;
