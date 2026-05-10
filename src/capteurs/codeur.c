@@ -11,8 +11,16 @@ static const struct device *gpiob = DEVICE_DT_GET(DT_NODELABEL(gpiob));
 static struct gpio_callback codeur_cb;
 
 static atomic_t compte = ATOMIC_INIT(0);
+static int64_t dernier_temps_interruption = 0;
 
 void codeur_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins) {
+    uint32_t temps_actuel = k_uptime_get_32();
+    
+    if (temps_actuel - (uint32_t)dernier_temps_interruption < 2) {
+        return; // Si trop rapide on ignore évite de saturer 
+    }
+    dernier_temps_interruption = temps_actuel;
+
     int level_b = gpio_pin_get(gpiob, PIN_B);
     if (level_b < 0) {
         return;

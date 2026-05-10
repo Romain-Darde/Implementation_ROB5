@@ -34,15 +34,8 @@ void moteur_init(void) {
 void moteur_set_vitesse(int vitesse) {
     uint8_t sens;
     
-    if (vitesse > 100) vitesse = 100;
-    if (vitesse < -100) vitesse = -100;
-
-    // Arrêt si la vitesse est dans une zone de consgine trop faible pour faire tourner le moteur
-    // if (vitesse > -20 && vitesse < 20) {
-    //     uint8_t stop[] = {CMD_TRIGO, MOTOR_CHB, 0x00};
-    //     i2c_write(i2c_dev, stop, 3, MOTEUR_ADDR);
-    //     return;
-    // }
+    if (vitesse > 60) vitesse = 60;
+    if (vitesse < -60) vitesse = -60;
 
     if (vitesse > 0) {
         sens = CMD_TRIGO;
@@ -52,8 +45,12 @@ void moteur_set_vitesse(int vitesse) {
     }
 
     // Trame I2C : {Sens, Moteur B (0x01), Vitesse}
+
+    // On essaie de prendre le Mutex pendant max 10 ms
     uint8_t cmd[] = {sens, MOTOR_CHB, (uint8_t)vitesse};
-    k_mutex_lock(&i2c_mutex, K_FOREVER);
-    i2c_write(i2c_dev, cmd, 3, MOTEUR_ADDR);
-    k_mutex_unlock(&i2c_mutex);
+    if (k_mutex_lock(&i2c_mutex, K_MSEC(10)) == 0) {
+        // Si succès, on envoie la commande et on libère le Mutex
+        i2c_write(i2c_dev, cmd, 3, MOTEUR_ADDR);
+        k_mutex_unlock(&i2c_mutex);
+    } 
 }

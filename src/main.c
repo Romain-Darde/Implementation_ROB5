@@ -23,53 +23,98 @@ PID_Controller mon_pid;
 K_MUTEX_DEFINE(robot_mutex);
 K_MUTEX_DEFINE(i2c_mutex);
 
+// Sémaphore pour synchroniser le démarrage du PID
+K_SEM_DEFINE(sem_boussole, 0, 1);
+
+// Définitions des piles pour les threads
+K_THREAD_STACK_DEFINE(thread_capteurs_stack, 1024);
+K_THREAD_STACK_DEFINE(thread_pid_stack, 1024);
+
+// Variables pour les structures des threads
+struct k_thread thread_capteurs_data;
+struct k_thread thread_pid_data;
+
+// Variables pour les IDs des threads
+k_tid_t thread_capteurs_id;
+k_tid_t thread_pid_id;
+
 // Thread de lecture des capteurs qui met à jour l'état du robot (angle actuel) en continu
 
 void thread_capteurs_fn(void *arg1, void *arg2, void *arg3) {
-    float angle_filtre = 0.0f;
+    float angle_filtre = boussole_get_angle();
+    int compteur_stabilisation = 0;
+
     while (1) {
         float nouvel_angle = boussole_get_angle();
 
         // Filtre pour lisser les lectures de la boussole
+
+        // On calcule la différence entre la nouvelle mesure et notre valeur filtrée
         float erreur_angle = nouvel_angle - angle_filtre;
+
+        // Normalisation : on s'assure d'emprunter le chemin le plus court.
+        // Ex : si le filtre est à 350° et le capteur lit 10°, l'erreur est de +20° (et non -340°)
         if (erreur_angle > 180.0f) {
             erreur_angle -= 360.0f;
         } else if (erreur_angle < -180.0f) {
             erreur_angle += 360.0f;
         }
+
+        // Application du filtre 
+        // On intègre seulement 20% de la nouvelle mesure pour lisser les variations brusques de la boussole
         angle_filtre += 0.2f * erreur_angle;
+
+        // On contraint le résultat final pour qu'il reste strictement dans la plage [0, 360[ degrés
         if (angle_filtre < 0.0f) {
             angle_filtre += 360.0f;
         } else if (angle_filtre >= 360.0f) {
             angle_filtre -= 360.0f;
         }
 
+        // On verrouille le Mutex car le thread PID lit ces valeurs en même temps
         k_mutex_lock(&robot_mutex, K_FOREVER);
         etat_robot.angle_actuel = angle_filtre;
+        etat_robot.consigne = 0.0f; // Nord fixe
         k_mutex_unlock(&robot_mutex);
 
-        // Permet que ce ne soit pas trop rapide
-        k_msleep(50); 
+        if (compteur_stabilisation < 40) {
+            compteur_stabilisation++;
+            if (compteur_stabilisation == 40) {
+                // Au bout de 2 secondes, on réveille le thread PID 
+                k_sem_give(&sem_boussole);
+            }
+        }
+
+        k_msleep(50); // Tempo pour ne pas saturer le bus I2C et laisser le temps au PID de réagir
     }
 }
 
 // Thread de contrôle PID qui lit l'état du robot, calcule la commande et l'envoie au moteur
 
 void thread_pid_fn(void *arg1, void *arg2, void *arg3) {
+    // Fréquence d'exécution du PID (10 ms)
     float dt = 0.01f;
-    const float DEGREES_PER_TICK = 360.0f / 207.0f;
+    // Constante de conversion : 207 ticks d'encodeur correspondent à un tour complet (360°)
+    const float DEGREES_PER_TICK = 360.0f / 207.0f; // 207 ticks valeur trouvée expérimentalement
 
-    k_msleep(200);
+    //k_msleep(2000);
+    k_sem_take(&sem_boussole, K_FOREVER);  // On attend que la boussole soit stable avant de démarrer le PID
+    // Lecture sécurisée de l'angle initial du robot et de la position initiale de l'aiguille pour calculer l'offset nord
     k_mutex_lock(&robot_mutex, K_FOREVER);
     float angle_robot_initial = etat_robot.angle_actuel;
     k_mutex_unlock(&robot_mutex);
 
+    // Récupération de la position de départ de l'aiguille via le codeur
     float angle_aiguille_initial = (float)codeur_get_ticks() * DEGREES_PER_TICK;
+
+    // Ramène l'angle de l'aiguille strictement entre [0, 360[ degrés
     angle_aiguille_initial = fmodf(angle_aiguille_initial, 360.0f);
     if (angle_aiguille_initial < 0.0f) {
         angle_aiguille_initial += 360.0f;
     }
 
+    // Calcul de l'Offset : On fige la relation entre l'aiguille et le Nord au démarrage.
+    // (Idéalement l'aiguille pointe vers le Nord avant d'allumer)
     float offset_nord = angle_robot_initial + angle_aiguille_initial;
     offset_nord = fmodf(offset_nord, 360.0f);
     if (offset_nord < 0.0f) {
@@ -77,6 +122,7 @@ void thread_pid_fn(void *arg1, void *arg2, void *arg3) {
     }
 
     while (1) {
+        // Lecture de la position actuelle du robot (boussole)
         k_mutex_lock(&robot_mutex, K_FOREVER);
         float angle_robot = etat_robot.angle_actuel;
         k_mutex_unlock(&robot_mutex);
@@ -88,20 +134,19 @@ void thread_pid_fn(void *arg1, void *arg2, void *arg3) {
             angle_aiguille += 360.0f;
         }
 
+        // Calcul dynamique
+        // L'aiguille doit compenser le mouvement du robot pour rester pointée vers le Nord
         float cible_aiguille = offset_nord - angle_robot;
 
-        // Le PID compare la position de l'aiguille à sa cible
+        // Le correcteur calcule la commande nécessaire pour réduire l'erreur entre la cible et la position actuelle
         int commande = pid_calculer_commande(&mon_pid, cible_aiguille, angle_aiguille, dt);
         
+        // Envoi de la commande au driver moteur
         moteur_set_vitesse(commande);
 
-        k_msleep(10); 
+        k_msleep(10); // Tempo
     }
 }
-
-// Définition des threads avec une pile de 1024 bytes, 7 correspond au niveau de priorité pour le codeur et 5 le niveau de priorité pour le PID
-K_THREAD_DEFINE(thread_capteurs_id, 1024, thread_capteurs_fn, NULL, NULL, NULL, 7, 0, 0);
-K_THREAD_DEFINE(thread_pid_id, 1024, thread_pid_fn, NULL, NULL, NULL, 5, 0, 0);
 
 // Ancienne version du main pour tester le codeur et le moteur séparément
 
@@ -181,7 +226,6 @@ int main(void) {
     // }
     // return 0;
 
-    k_msleep(3000); // Laisser le temps d'ouvrir le terminal après le reset
     //printk("Démarrage\n");
 
     // Test debug I2C pour vérifier que la boussole répond avant de lancer le reste du code
@@ -194,8 +238,10 @@ int main(void) {
     // }
 
     // Initialisation hardware (I2C, GPIO, Moteur, Codeur, Boussole)
-    //k_msleep(3000);
-    //printk("Initialisation hardware\n");
+    // k_msleep(3000);
+    // printk("Initialisation hardware\n");
+
+    k_msleep(3000); // Laisser le temps d'ouvrir le terminal après le reset
     moteur_init();
     codeur_init();
     boussole_init();
@@ -207,13 +253,20 @@ int main(void) {
 
     // Test de la boussole pour vérifier qu'elle répond avant de lancer le reste du code
     // if (boussole_init() != 0) {
-    //     printk("ATTENTION: La boussole ne répond pas, vérifie le câblage !\n");
+    //     printk("ERREUR BOUSSOLE\n");
     // } else {
     //     printk("Boussole OK !\n");
     // }
 
     // Valeurs du PID ordre : Kp=1.5, Ki=0.1, Kd=0.5
     pid_init(&mon_pid, 1.5, 0.0, 0.0);
+
+    // Création et démarrage des threads après l'initialisation matérielle
+    thread_capteurs_id = k_thread_create(&thread_capteurs_data, thread_capteurs_stack, 1024, thread_capteurs_fn, NULL, NULL, NULL, 7, 0, K_NO_WAIT);
+    k_thread_start(thread_capteurs_id);
+
+    thread_pid_id = k_thread_create(&thread_pid_data, thread_pid_stack, 1024, thread_pid_fn, NULL, NULL, NULL, 5, 0, K_NO_WAIT);
+    k_thread_start(thread_pid_id);
 
     while (1) {
         float a, c;
@@ -223,7 +276,7 @@ int main(void) {
         k_mutex_unlock(&robot_mutex);
 
         printk("Cible: %.1f | Actuel: %.1f | Erreur: %.1f\r\n", c, a, c - a);
-        k_msleep(1000);
+        k_msleep(2000); // Tempo pour avoir le temps de lire les valeurs dans le terminal
     }
 
     return 0;
