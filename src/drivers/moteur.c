@@ -12,7 +12,7 @@ static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 #define CMD_TRIGO   0x02
 #define CMD_HORAIRE 0x03
 
-// Moteur connécté sur le canal B du driver motor : B1 et B2
+// Moteur connecté sur le canal B du driver motor : B1 et B2
 #define MOTOR_CHB 0x01 
 
 void moteur_init(void) {

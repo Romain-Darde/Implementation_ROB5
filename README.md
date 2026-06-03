@@ -24,9 +24,9 @@ Le driver moteur utilise une source d'énergie dédiée (pile 9V provenant d'un 
 
 La phase 1 a consisté en la prise en main du matériel et la vérification des branchements. Les tests de diagnostic au démarrage confirment l'intégrité du bus I2C et la réponse correcte des composants :
 
-- Identifiant IMU (0x69) : 0x11 (Conforme)
-- Identifiant Magnétomètre (0x0C) : 0x48 (Conforme)
-- Codeur : Validation de l'incrémentation via interruption externe (EXTI) sur le port D4.
+- Identifiant IMU (0x69) : 0x11
+- Identifiant Magnétomètre (0x0C) : 0x48
+- Codeur : Validation de l'incrémentation sur le port D4 durant la phase 1 puis D2 pour tests pour la phase 2. 
 
 ## Guide d'Utilisation
 

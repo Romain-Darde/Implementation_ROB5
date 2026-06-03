@@ -1,7 +1,7 @@
 # Rapport de Projet et liens avec les cours suivis en échange (cours disponibles dans le dossier "cours") : Asservissement d'Aiguille sous Zephyr RTOS
 
 ## 1. Introduction
-Ce projet implémente un système d'asservissement sur une carte STM32 Nucleo sous Zephyr RTOS. L'objectif est de maintenir une aiguille pointée vers le Nord magnétique en compensant les rotations de la base du robot. Ce système complexe a nécessité l'application des concepts de Systèmes Temps Réel (ETS) pour garantir la réactivité, la fiabilité et la protection des ressources partagées. 
+Ce projet implémente un système d'asservissement sur une carte STM32 Nucleo sous Zephyr RTOS. L'objectif est de maintenir une aiguille pointée vers le Nord magnétique en compensant les rotations de la base du robot. Ce système complexe a nécessité l'application des concepts de Systèmes Temps Réel pour garantir la réactivité, la fiabilité et la protection des variables partagées. 
 
 ## 2. Modèle Multitâche et Planification (Cours suivi tema 3 et tema 8: Planificación y Tareas)
 Le système a été modélisé autour de plusieurs tâches (threads) concurrentes afin de séparer l'acquisition des données de la logique de contrôle. 
@@ -18,7 +18,7 @@ Conformément à la théorie, un service d'interruption doit avoir un temps d'ex
 Le projet utilise des mécanismes de synchronisation pour gérer l'accès concurrent aux ressources matérielles.
 
 ### A. Exclusion Mutuelle (Mutex)
-Le bus I2C est partagé entre le magnétomètre, l'IMU et le driver moteur. Pour éviter qu'un thread ne corrompe une trame I2C en cours d'envoi, un mutex (i2c_mutex) protège le bus, définissant une section critique pour assurer l'atomicité des opérations. Afin d'éviter les interblocages (Deadlocks) ou les attentes infinies en cas de défaillance matérielle (ex: Brownout), j'ai implémenté un timeout de sécurité (10 ms), respectant la gestion des surtemps (sobretiempo) préconisée dans les systèmes critiques.
+Le bus I2C est partagé entre le magnétomètre, l'IMU et le driver moteur. Pour éviter qu'un thread ne corrompe une trame I2C en cours d'envoi, un mutex (i2c_mutex) protège le bus, définissant une section critique pour assurer l'atomicité des opérations. Pour éviter tout risque de deadlock suite à une défaillance matérielle (ex: Brownout), j'ai ajouté un timeout de 10 ms, comme indiqué dans le cours pour les systèmes critiques pour empêcher qu'un composant défaillant ne bloque tout le programme.
 
 ### B. Synchronisation Événementielle (Semáforos)
 Un sémaphore (sem_boussole) est utilisé pour orchestrer le démarrage du système. Le thread PID attend passivement via k_sem_take que le thread Capteurs valide la stabilisation du filtre via un k_sem_give. Cette approche évite l'attente active et optimise l'utilisation des ressources CPU en bloquant le thread tant que la condition n'est pas remplie.

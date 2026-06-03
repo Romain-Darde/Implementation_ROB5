@@ -258,8 +258,8 @@ int main(void) {
     //     printk("Boussole OK !\n");
     // }
 
-    // Valeurs du PID ordre : Kp=1.5, Ki=0.1, Kd=0.5
-    pid_init(&mon_pid, 1.5, 0.0, 0.0);
+    // Valeurs du PID ordre : Kp=1.5, Ki=0.02, Kd=0.8
+    pid_init(&mon_pid, 1.5, 0.02, 0.8);
 
     // Création et démarrage des threads après l'initialisation matérielle
     thread_capteurs_id = k_thread_create(&thread_capteurs_data, thread_capteurs_stack, 1024, thread_capteurs_fn, NULL, NULL, NULL, 7, 0, K_NO_WAIT);
