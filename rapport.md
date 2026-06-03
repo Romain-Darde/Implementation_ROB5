@@ -1,7 +1,7 @@
 # Rapport de Projet et liens avec les cours suivis en échange (cours disponibles dans le dossier "cours") : Asservissement d'Aiguille sous Zephyr RTOS
 
 ## 1. Introduction
-Ce projet implémente un système d'asservissement sur une carte STM32 Nucleo sous Zephyr RTOS. L'objectif est de maintenir une aiguille pointée vers le Nord magnétique en compensant les rotations de la base du robot. Ce système complexe a nécessité l'application des concepts de Systèmes Temps Réel pour garantir la réactivité, la fiabilité et la protection des variables partagées. 
+Ce projet implémente un système d'asservissement sur une carte STM32 Nucleo sous Zephyr RTOS. L'objectif est de maintenir une aiguille pointée vers le Nord magnétique en compensant les rotations de la base du robot. Ce projet a nécessité l'application des concepts de Systèmes Temps Réel vus en cours d'Informatique Industriel pour garantir la réactivité, la fiabilité et la protection des variables partagées. 
 
 ## 2. Modèle Multitâche et Planification (Cours suivi tema 3 et tema 8: Planificación y Tareas)
 Le système a été modélisé autour de plusieurs tâches (threads) concurrentes afin de séparer l'acquisition des données de la logique de contrôle. 
